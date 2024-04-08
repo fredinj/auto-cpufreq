@@ -32,7 +32,7 @@ def get_stats():
 def get_version():
     # snap package
     if os.getenv("PKG_MARKER") == "SNAP":
-        return getoutput("echo \(Snap\) $SNAP_VERSION")
+        return getoutput(r"echo \(Snap\) $SNAP_VERSION")
     # aur package
     elif dist_name in ["arch", "manjaro", "garuda"]:
         aur_pkg_check = run("pacman -Qs auto-cpufreq > /dev/null", shell=True)
@@ -194,7 +194,7 @@ class DropDownMenu(Gtk.MenuButton):
                     transient_for=parent,
                     message_type=Gtk.MessageType.INFO,
                     buttons=Gtk.ButtonsType.OK,
-                    text="Daemon succesfully removed"
+                    text="Daemon successfully removed"
                 )
                 dialog.format_secondary_text("The app will now close. Please reopen to apply changes")
                 dialog.run()
@@ -299,7 +299,7 @@ class DaemonNotRunningView(Gtk.Box):
                 transient_for=parent,
                 message_type=Gtk.MessageType.INFO,
                 buttons=Gtk.ButtonsType.OK,
-                text="Daemon succesfully installed"
+                text="Daemon successfully installed"
             )
             dialog.format_secondary_text("The app will now close. Please reopen to apply changes")
             dialog.run()

@@ -174,32 +174,48 @@ def check_for_update():
     # Fetch the latest release information from GitHub API
     latest_release_url = f"https://api.github.com/repos/AdnanHodzic/auto-cpufreq/releases/latest"
     try:
-        latest_release = requests.get(latest_release_url).json()
+        response = requests.get(latest_release_url)
+        if response.status_code == 200:
+            latest_release = response.json()
+        else:
+            message = response.json().get("message")
+            print("Error fetching recent release!")
+            if message is not None and message.startswith("API rate limit exceeded"):
+                print("GitHub Rate limit exceeded. Please try again later within 1 hour or use different network/VPN.")
+            else: 
+                print("Unexpected status code:", response.status_code)
+            return False
     except (requests.exceptions.ConnectionError, requests.exceptions.Timeout,
             requests.exceptions.RequestException, requests.exceptions.HTTPError) as err:
-        print ("Error Connecting to server!")
-        exit(1)
-
-    latest_version =  latest_release["tag_name"]
-
-    # Get the current version of auto-cpufreq
-    # Extract version number from the output string
-    output = check_output(['auto-cpufreq', '--version']).decode('utf-8')
-    try:
-        version_line = next((re.search(r'\d+\.\d+\.\d+', line).group() for line in output.split('\n') if line.startswith('auto-cpufreq version')), None)
-    except AttributeError:
-        print("Error Retrieving Current Version!")
-        exit(1)
-    installed_version = "v" + version_line
-    #Check whether the same is installed or not
-    # Compare the latest version with the installed version and perform update if necessary
-    if latest_version == installed_version:
-        print("auto-cpufreq is up to date")
+        print("Error Connecting to server!")
         return False
+
+    latest_version = latest_release.get("tag_name")
+
+    if latest_version is not None:
+        # Get the current version of auto-cpufreq
+        # Extract version number from the output string
+        output = check_output(['auto-cpufreq', '--version']).decode('utf-8')
+        try:
+            version_line = next((re.search(r'\d+\.\d+\.\d+', line).group() for line in output.split('\n') if line.startswith('auto-cpufreq version')), None)
+        except AttributeError:
+            print("Error Retrieving Current Version!")
+            exit(1)
+        installed_version = "v" + version_line
+        #Check whether the same is installed or not
+        # Compare the latest version with the installed version and perform update if necessary
+        if latest_version == installed_version:
+            print("auto-cpufreq is up to date")
+            return False
+        else:
+            print(f"Updates are available,\nCurrent version: {installed_version}\nLatest version: {latest_version}")
+            print("Note that your previous custom settings might be erased with the following update")
+            return True
     else:
-        print(f"Updates are available,\nCurrent version: {installed_version}\nLatest version: {latest_version}")
-        print("Note that your previous custom settings might be erased with the following update")
-        return True
+        # Handle the case where "tag_name" key doesn't exist
+        print("Malformed Released data!\nReinstall manually or Open an issue on GitHub for help!")
+
+    
     
 def new_update(custom_dir):
     os.chdir(custom_dir)
@@ -672,12 +688,28 @@ def set_powersave():
     if get_override() != "default":
         print("Warning: governor overwritten using `--force` flag.")
     run(f"cpufreqctl.auto-cpufreq --governor --set={gov}", shell=True)
-    if (
-        Path("/sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference").exists()
-        and Path("/sys/devices/system/cpu/intel_pstate/hwp_dynamic_boost").exists() is False
-    ):
-        run("cpufreqctl.auto-cpufreq --epp --set=balance_power", shell=True)
-        print('Setting to use: "balance_power" EPP')
+
+
+    if Path("/sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference").exists() is False:
+        print('Not setting EPP (not supported by system)')
+    else:
+        dynboost_enabled = Path("/sys/devices/system/cpu/intel_pstate/hwp_dynamic_boost").exists()
+
+        if dynboost_enabled:
+            dynboost_enabled = bool(int(
+                os.popen("cat /sys/devices/system/cpu/intel_pstate/hwp_dynamic_boost").read()
+            ))
+
+        if dynboost_enabled:
+            print('Not setting EPP (dynamic boosting is enabled)')
+        else:
+            if conf.has_option("battery", "energy_performance_preference"):
+                epp = conf["battery"]["energy_performance_preference"]
+                run(f"cpufreqctl.auto-cpufreq --epp --set={epp}", shell=True)
+                print(f'Setting to use: "{epp}" EPP')
+            else:
+                run("cpufreqctl.auto-cpufreq --epp --set=balance_power", shell=True)
+                print('Setting to use: "balance_power" EPP')
 
     # set frequencies
     set_frequencies()
@@ -883,12 +915,28 @@ def set_performance():
         f"cpufreqctl.auto-cpufreq --governor --set={gov}",
         shell=True,
     )
-    if (
-        Path("/sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference").exists()
-        and Path("/sys/devices/system/cpu/intel_pstate/hwp_dynamic_boost").exists() is False
-    ):
-        run("cpufreqctl.auto-cpufreq --epp --set=balance_performance", shell=True)
-        print('Setting to use: "balance_performance" EPP')
+
+
+    if Path("/sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference").exists() is False:
+        print('Not setting EPP (not supported by system)')
+    else:
+        dynboost_enabled = Path("/sys/devices/system/cpu/intel_pstate/hwp_dynamic_boost").exists()
+
+        if dynboost_enabled:
+            dynboost_enabled = bool(int(
+                os.popen("cat /sys/devices/system/cpu/intel_pstate/hwp_dynamic_boost").read()
+            ))
+
+        if dynboost_enabled:
+            print('Not setting EPP (dynamic boosting is enabled)')
+        else:
+            if conf.has_option("charger", "energy_performance_preference"):
+                epp = conf["charger"]["energy_performance_preference"]
+                run(f"cpufreqctl.auto-cpufreq --epp --set={epp}", shell=True)
+                print(f'Setting to use: "{epp}" EPP')
+            else:
+                run("cpufreqctl.auto-cpufreq --epp --set=balance_performance", shell=True)
+                print('Setting to use: "balance_performance" EPP')
 
     # set frequencies
     set_frequencies()

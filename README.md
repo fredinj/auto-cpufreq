@@ -1,4 +1,6 @@
 # auto-cpufreq
+[![Linux Build](https://github.com/AdnanHodzic/auto-cpufreq/actions/workflows/build-linux.yml/badge.svg?event=push)](https://github.com/AdnanHodzic/auto-cpufreq/actions/workflows/build-linux.yml)
+[![Nix Flake](https://github.com/AdnanHodzic/auto-cpufreq/actions/workflows/build-nix.yaml/badge.svg?event=push)](https://github.com/AdnanHodzic/auto-cpufreq/actions/workflows/build-nix.yaml)
 
 Automatic CPU speed & power optimizer for Linux. Actively monitors laptop battery state, CPU usage, CPU temperature, and system load, ultimately allowing you to improve battery life without making any compromises.
 
@@ -51,6 +53,9 @@ Example of `auto-cpufreq --stats` CLI output
     * [Update - auto-cpufreq update](#update---auto-cpufreq-update)
     * [Remove - auto-cpufreq daemon](#remove---auto-cpufreq-daemon)
     * [stats](#stats)
+* [Battery charging thresholds](#battery-charging-thresholds)
+  * [Supported Devices](#supported-devices)
+  * [Battery config](#battery-config)
 * [Troubleshooting](#troubleshooting)
     * [AUR](#aur)
 * [Discussion](#discussion)
@@ -93,10 +98,13 @@ Only devices with an Intel, AMD, or ARM CPU are supported. This tool was develop
   * CPU temperature in combination with CPU utilization/load (to prevent overheating)
   * System load
 * Automatic CPU & power optimization (temporary and persistent)
+* Settings battery charging thresholds (limited support)
 
 ## Installing auto-cpufreq
 
 ### auto-cpufreq-installer
+
+> As auto-cpufreq relies on git based versioning, users are advised to install `auto-cpufreq`  using `git clone` method only. Downloading source code as a zip/from release will emit build error like [these](https://github.com/AdnanHodzic/auto-cpufreq/issues/623).
 
 Get source code, run installer, and follow on-screen instructions:
 
@@ -122,12 +130,20 @@ sudo snap install auto-cpufreq
 
 ### AUR package (Arch/Manjaro Linux)
 
-*The AUR packages below are often unmaintained & have issues*! Unless you see evidence of good recent maintenance, use the [auto-cpufreq-installer](#auto-cpufreq-installer) instead as otherwise you'll run into errors (e.g., [#471](https://github.com/AdnanHodzic/auto-cpufreq/issues/471)). If you still choose to install via AUR, see the [Troubleshooting](#aur) section for solved known issues.
+The AUR [Release Package](https://aur.archlinux.org/packages/auto-cpufreq) was last updated on version 2.2.0 and is currently being maintained by [MusicalArtist12](https://github.com/MusicalArtist12), [liljaylj](https://github.com/liljaylj), and [parmjotsinghrobot](https://github.com/Parmjot-Singh). 
 
-* [Binary Package](https://aur.archlinux.org/packages/auto-cpufreq)
-(for the latest binary release)
-* [Git Package](https://aur.archlinux.org/packages/auto-cpufreq-git)
-(for the latest commits/changes)
+**Notices**
+
+* The [Git Package](https://aur.archlinux.org/packages/auto-cpufreq-git) is seperately maintained and was last updated on version 1.9.6. 
+* The build process links to `/usr/share/` instead of `/usr/local/share/`
+* The daemon installer provided does not work, instead start the daemon with 
+
+``` 
+# systemctl enable --now auto-cpufreq 
+```
+* The GNOME Power Profiles daemon is [automatically disabled by auto-cpufreq-installer](https://github.com/AdnanHodzic/auto-cpufreq#1-power_helperpy-script-snap-package-install-only) due to it's conflict with auto-cpufreq.service. However, this doesn't happen with AUR installs, which can lead to problems (e.g., [#463](https://github.com/AdnanHodzic/auto-cpufreq/issues/463)) if not masked manually.
+    * Open a terminal and run `sudo systemctl mask power-profiles-daemon.service` (then `enable` and `start` the auto-cpufreq.service if you haven't already).
+
 
 ### NixOS
 
@@ -145,7 +161,7 @@ This repo contains a flake that exposes a NixOS Module that manages and offers o
     inputs = {
         # ---Snip---
         auto-cpufreq = {
-            url = "github:adnanhodzic/auto-cpufreq/nix";
+            url = "github:AdnanHodzic/auto-cpufreq";
             inputs.nixpkgs.follows = "nixpkgs";
         };
         # ---Snip---
@@ -278,6 +294,9 @@ By default, auto-cpufreq does not use the config file! If you wish to use it, th
 # preferred governor
 governor = performance
 
+# EPP: see available preferences by running: cat /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_available_preferences
+energy_performance_preference = performance
+
 # minimum cpu frequency (in kHz)
 # example: for 800 MHz = 800000 kHz --> scaling_min_freq = 800000
 # see conversion info: https://www.rapidtables.com/convert/frequency/mhz-to-hz.html
@@ -299,6 +318,9 @@ turbo = auto
 # preferred governor
 governor = powersave
 
+# EPP: see available preferences by running: cat /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_available_preferences
+energy_performance_preference = power
+
 # minimum cpu frequency (in kHz)
 # example: for 800 MHz = 800000 kHz --> scaling_min_freq = 800000
 # see conversion info: https://www.rapidtables.com/convert/frequency/mhz-to-hz.html
@@ -313,6 +335,12 @@ governor = powersave
 
 # turbo boost setting (always, auto, or never)
 turbo = auto
+
+# battery charging threshold
+# reference: https://github.com/AdnanHodzic/auto-cpufreq/#battery-charging-thresholds
+#enable_thresholds = true
+#start_threshold = 20
+#stop_threshold = 80
 ```
 
 ## How to run auto-cpufreq
@@ -449,12 +477,43 @@ If the daemon has been installed, live stats of CPU/system load monitoring and o
 
 `auto-cpufreq --stats`
 
+## Battery charging thresholds
+
+As of [v2.2.0](https://github.com/AdnanHodzic/auto-cpufreq/releases/tag/v2.2.0), battery charging thresholds can be set in the config file. This enforces your battery to start and stop charging at defined values
+
+### Supported devices
+
+* **Lenovo ThinkPad** (thinkpad_acpi)*
+* **Lenovo IdeaPad** (ideapad_acpi)*
+
+***Please note, your laptop must have an installed ACPI kernel driver specific to the manufacturer.** To check if you have the correct module installed and loaded run `lsmod [module]`
+
+**To request that your device be supported, please open an [issue](https://github.com/AdnanHodzic/auto-cpufreq/issues/new). In your issue, make us aware of the driver that works with your laptop**
+
+### Battery config
+Edit the config at `/etc/auto-cpufreq.conf`
+
+Example config for battery ([already part of example config file](https://github.com/AdnanHodzic/auto-cpufreq/#example-config-file-contents))
+```
+[battery]
+enable_thresholds = true
+start_threshold = 20
+stop_threshold = 80
+```
+
+### Lenovo_laptop conservation mode
+
+this works only with `lenovo_laptop` kernel module compatable laptops.  
+
+add `ideapad_laptop_conservation_mode = true` to your `auto-cpufreq.conf` file
+
 ## Troubleshooting
 
 **Q:** If after installing auto-cpufreq you're (still) experiencing:
 * high CPU temperatures
 * CPU not scaling to minimum/maximum frequencies
 * suboptimal CPU performance
+* turbo mode not available
 
 **A:** If you're using the `intel_pstate/amd-pstate` CPU management driver, consider changing it to `acpi-cpufreq`.
 
@@ -515,10 +574,7 @@ Once you have made the necessary changes to the `cmdline` file, you can update i
 
 ### AUR
 
-* For AUR installs, the command `sudo auto-cpufreq --install` produces an error ([#471](https://github.com/AdnanHodzic/auto-cpufreq/issues/471)), so don't use that command.
-    * The auto-cpufreq-installer script automates the enabling of auto-cpufreq.service, but since the AUR install process doesn't use that script, you need to open a terminal and run `sudo systemctl enable --now auto-cpufreq.service` to enable and start the service.
-* The GNOME Power Profiles daemon is [automatically disabled by auto-cpufreq-installer](https://github.com/AdnanHodzic/auto-cpufreq#1-power_helperpy-script-snap-package-install-only) due to it's conflict with auto-cpufreq.service. However, this doesn't happen with AUR installs, which can lead to problems (e.g., [#463](https://github.com/AdnanHodzic/auto-cpufreq/issues/463)) if not masked manually.
-    * Open a terminal and run `sudo systemctl mask power-profiles-daemon.service` (then `enable` and `start` the auto-cpufreq.service if you haven't already).
+* If the AUR installer does not work for your system, fallback to `auto-cpufreq-installer` and open an issue. 
 
 ## Discussion:
 

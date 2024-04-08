@@ -4,6 +4,9 @@
 # preferred governor.
 governor = performance
 
+# EPP: see available preferences by running: cat /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_available_preferences
+energy_performance_preference = performance
+
 # minimum cpu frequency (in kHz)
 # example: for 800 MHz = 800000 kHz --> scaling_min_freq = 800000
 # see conversion info: https://www.rapidtables.com/convert/frequency/mhz-to-hz.html
@@ -25,6 +28,9 @@ turbo = auto
 # preferred governor
 governor = powersave
 
+# EPP: see available preferences by running: cat /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_available_preferences
+energy_performance_preference = power
+
 # minimum cpu frequency (in kHz)
 # example: for 800 MHz = 800000 kHz --> scaling_min_freq = 800000
 # see conversion info: https://www.rapidtables.com/convert/frequency/mhz-to-hz.html
@@ -39,3 +45,17 @@ governor = powersave
 
 # turbo boost setting. possible values: always, auto, never
 turbo = auto
+
+# experimental 
+
+# Add battery charging threshold (currently only available to Lenovo)
+# checkout README.md for more info
+
+# enable thresholds true or false
+#enable_thresholds = true
+#
+# start threshold (0 is off ) can be 0-99
+#start_threshold = 0
+#
+# stop threshold (100 is off) can be 1-100
+#stop_threshold = 100
